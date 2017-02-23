@@ -6,8 +6,7 @@ You have a SVG file. For whatever reason, you need a PNG. **svg2png** can help.
 const fs = require("pn/fs"); // https://www.npmjs.com/package/pn
 const svg2png = require("svg2png");
 
-fs.readFile("source.svg")
-    .then(svg2png)
+svg2png("~/test.svg")
     .then(buffer => fs.writeFile("dest.png", buffer))
     .catch(e => console.error(e));
 ```
@@ -15,31 +14,20 @@ fs.readFile("source.svg")
 In the above example, we use the `width` and `height` attributes specified in the SVG file to automatically determine the size of the SVG. You can also explicitly set the size:
 
 ```js
-svg2png(sourceBuffer, { width: 300, height: 400 })
+svg2png(url, { width: 300, height: 400 })
     .then(buffer => ...)
     .catch(e => console.error(e));
 ```
 
 This is especially useful for images without `width` or `height`s. You can even specify just one of them and (if the image has an appropriate `viewBox`) the other will be set to scale.
 
-Finally, some SVG files reference external resources using relative paths. You can set them up for correct conversion by passing the `filename` or `url` option:
-
-```js
-svg2png(sourceBuffer, { url: "https://example.com/awesomeness.svg" })
-    .then(buffer => ...)
-    .catch(e => console.error(e));
-
-svg2png(sourceBuffer, { filename: path.resolve(__dirname, "images/fun.svg") })
-    .then(buffer => ...)
-    .catch(e => console.error(e));
-```
 
 ## Sync variant
 
 There's also a sync variant, for use in your shell scripts:
 
 ```js
-const outputBuffer = svg2png.sync(sourceBuffer, options);
+const outputBuffer = svg2png.sync(url, options);
 ```
 
 ## How the conversion is done
