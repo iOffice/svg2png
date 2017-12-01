@@ -27,6 +27,11 @@ const argv = yargs
         type: "string",
         describe: "The output file height, in pixels"
     })
+    .option("s", {
+        alias: "scale",
+        type: "string",
+        describe: "The output file scale"
+    })
     .demand(1)
     .help(false)
     .version()
@@ -41,6 +46,7 @@ const argv = yargs
         const output = await svg2png(inputFilename, {
             width: argv.width,
             height: argv.height,
+            scale: argv.scale,
             filename: inputFilename
         });
 
