@@ -30,7 +30,7 @@ const argv = yargs
     .option("s", {
         alias: "scale",
         type: "string",
-        describe: "The output file scale"
+        describe: "The inverted scale to use fo the output file"
     })
     .demand(1)
     .help(false)
@@ -50,7 +50,7 @@ const argv = yargs
             filename: inputFilename
         });
 
-        await fs.writeFile(outputFilename, output, { flag: "wx" });
+        await fs.writeFile(outputFilename, output, { flag: "w" });
     } catch (e) {
         process.stderr.write(`${e.stack}\n`);
         process.exit(1);
