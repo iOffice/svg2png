@@ -51,6 +51,7 @@ const argv = yargs
         });
 
         await fs.writeFile(outputFilename, output, { flag: "w" });
+        process.exit(0);
     } catch (e) {
         process.stderr.write(`${e.stack}\n`);
         process.exit(1);
