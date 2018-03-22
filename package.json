@@ -20,7 +20,7 @@
     "file-url": "^2.0.0",
     "pn": "^1.0.0",
     "puppeteer": "^1.0.0",
-    "puppeteer-pool": "^1.0.3",
+    "puppeteer-pool": "iOffice/puppeteer-pool#d30a0e2",
     "sharp": "^0.19.0",
     "tmp": "0.0.33",
     "yargs": "^6.5.0"
