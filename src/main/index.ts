@@ -1,5 +1,13 @@
+import {
+  IDimensions,
+  IConfig,
+  Svg2png,
+  svg2png,
+} from './svg2png';
 
-import { createPuppeteerPool } from './puppeteer-pool';
 export {
-  createPuppeteerPool,
+  IDimensions,
+  IConfig,
+  Svg2png,
+  svg2png,
 };

@@ -17,6 +17,7 @@
     "paths": {
     },
     "lib": [
+      "dom",
       "es6"
     ],
     "rootDir": "src",
