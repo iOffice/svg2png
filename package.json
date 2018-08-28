@@ -1,7 +1,7 @@
 {
   "name": "@ioffice/svg2png",
   "description": "Converts SVGs to PNGs, using Chromium",
-  "version": "0.0.1-beta.1807101627",
+  "version": "0.0.1",
   "author": "Orignal Author: Domenic Denicola (https://domenic.me)",
   "contributors": [
     "iOFFICE"
