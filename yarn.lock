@@ -1311,10 +1311,6 @@ sshpk@^1.7.0:
     jsbn "~0.1.0"
     tweetnacl "~0.14.0"
 
-stackback@0.0.2:
-  version "0.0.2"
-  resolved "https://registry.yarnpkg.com/stackback/-/stackback-0.0.2.tgz#1ac8a0d9483848d1695e418b6d031a3c3ce68e3b"
-
 stealthy-require@^1.1.0:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/stealthy-require/-/stealthy-require-1.1.1.tgz#35b09875b4ff49f26a777e509b3090a3226bf24b"
@@ -1534,12 +1530,6 @@ verror@1.10.0:
 which-module@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/which-module/-/which-module-1.0.0.tgz#bba63ca861948994ff307736089e3b96026c2a4f"
-
-why-is-node-running@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/why-is-node-running/-/why-is-node-running-2.0.2.tgz#faf352f095356c8c37a28bf645f874e5648c8d02"
-  dependencies:
-    stackback "0.0.2"
 
 window-size@0.1.0:
   version "0.1.0"
