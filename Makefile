@@ -16,6 +16,10 @@ build: clean
 clean: FORCE
 	rm -rf build
 
+# Should do it if we upgrade chrome?
+rebase: build
+	node build/test/rebaseline.js
+
 info:
 	node --version
 	npm --version
