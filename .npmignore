@@ -6,7 +6,9 @@ src
 .gitignore
 .npmignore
 Makefile
+tsconfig.dev.json
 tsconfig.json
+tslint.dev.json
 tslint.json
 CONTRIBUTING.md
 version.json
