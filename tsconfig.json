@@ -15,6 +15,7 @@
   },
   "files": [
     "src/main/index.ts",
+    "src/main/svg2png-cli.ts",
     "src/test/index.ts"
   ],
   "exclude": [
