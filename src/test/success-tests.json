@@ -1,0 +1,7 @@
+[
+    {
+        "name": "width/height attributes only: no resizing",
+        "file": "width-height-only.svg",
+        "notes to validate": "should be 550x600"
+    }
+]
