@@ -341,12 +341,16 @@ class Svg2png {
   }
 }
 
-function svg2png(config: IConfig): Promise<Buffer> {
+async function svg2png(config: IConfig): Promise<Buffer> {
   const s2pInstance = new Svg2png(config);
-  return s2pInstance.convert().then((result) => {
-    s2pInstance.log('success');
+  try {
+    const result = s2pInstance.convert();
+    s2pInstance.log('SVG2PNG::success');
     return result;
-  });
+  } catch (err) {
+    s2pInstance.log('SVG2PNG::failure', { error: err });
+    return Promise.reject(err);
+  }
 }
 
 export {
