@@ -19,7 +19,6 @@ interface IConfig extends Partial<IDimensions> {
 
 class Svg2png {
   static pages: { [key: number]: Page } = {};
-  static debug = (...args: any[]) => console.log('[SVG2PNG]', ...args);
   static pool: Pool<Browser> = createPuppeteerPool(
     {
       maxUses: 50,
@@ -59,9 +58,13 @@ class Svg2png {
     }
   }
 
+  static debug(date: number, id: number, ...args: any[]) {
+    console.log(`[SVG2PNG:${id}:${date}]`,...args);
+  }
+
   log(...args: any[]): void {
     if (this.options.debug) {
-      Svg2png.debug(...args);
+      Svg2png.debug(this.id, +(new Date()), ...args);
     }
   }
 
