@@ -88,21 +88,32 @@ class Svg2png {
         reject(new Error('this should not have been called, did you cancel the timeout?'));
       }, this.options.conversionTimeout || 30000);
 
+      let buffer;
       try {
         this.log('calling "pool.use"');
-        const buffer = await Svg2png.pool.use(browser => fn(browser));
+        buffer = await Svg2png.pool.use(browser => fn(browser));
         clearTimeout(timeoutHandle);
+      } catch (err) {
+        this.log('ERROR', { error: err });
+        this.log('clearing timeout');
+        clearTimeout(timeoutHandle);
+        try {
+          this.log('closing page');
+          await this.closePage();
+        } catch (e) {
+          this.log('failed to close page:', { error: e });
+        }
+        this.log('conversion failed');
+        return reject(err);
+      }
+
+      try {
         this.log('closing page');
         await this.closePage();
-        resolve(buffer);
-      } catch (err) {
-        try {
-          this.log('ERROR: clearing timeout and closing page:', { error: err });
-          clearTimeout(timeoutHandle);
-          await this.closePage();
-        } catch (e) {}
-        reject(err);
+      } catch (e) {
+        this.log('failed to close page:', { error: e });
       }
+      resolve(buffer);
     });
   }
 
