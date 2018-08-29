@@ -68,9 +68,14 @@ class Svg2png {
     }
   }
 
-  failure(msg: string): Promise<any> {
-    this.log(`FAILURE: ${msg}`);
-    return Promise.reject(new Error(msg));
+  failure(msg: string | Error): Promise<any> {
+    if (typeof msg === 'string') {
+      this.log(`FAILURE: ${msg}`);
+      return Promise.reject(new Error(msg));
+    } else {
+      this.log(`FAILURE: ${msg.message}`, { error: msg });
+      return Promise.reject(msg);
+    }
   }
 
   convert(): Promise<Buffer> {
@@ -210,17 +215,22 @@ class Svg2png {
     for (let ypos = 0, chunk = 1; ypos < height; ypos += maxScreenshotHeight, chunk++) {
       this.log(`processing ${chunk}/${totalChunks}`);
       const clipHeight = Math.min(height - ypos, maxScreenshotHeight);
-      const screenshot = await page.screenshot({
-        clip: {
-          x: 0,
-          y: ypos,
-          width: width,
-          height: clipHeight,
-        },
-        omitBackground: true,
-      });
-      const buffer = await sharp(screenshot).raw().toBuffer();
-      chunks.push(buffer);
+      try {
+        const screenshot = await page.screenshot({
+          clip: {
+            x: 0,
+            y: ypos,
+            width: width,
+            height: clipHeight,
+          },
+          omitBackground: true,
+        });
+        const buffer = await sharp(screenshot).raw().toBuffer();
+        chunks.push(buffer);
+      } catch (err) {
+        this.log('chunk collection failure', { error: err });
+        return this.failure(err);
+      }
     }
 
     const channels = 4;
@@ -228,13 +238,18 @@ class Svg2png {
     const composite = Buffer.allocUnsafe(bufferSize * chunks.length);
     chunks.forEach((s, i) => s.copy(composite, i * bufferSize));
     this.log('waiting on sharp');
-    return await sharp(composite, {
-      raw: {
-        width: width,
-        height: height,
-        channels: channels,
-      },
-    }).png().toBuffer();
+    try {
+      return await sharp(composite, {
+        raw: {
+          width: width,
+          height: height,
+          channels: channels,
+        },
+      }).png().toBuffer();
+    } catch (err) {
+      this.log('sharp failure', { error: err });
+      return this.failure(err);
+    }
   }
 
   /**
