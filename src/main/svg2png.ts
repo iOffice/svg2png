@@ -33,7 +33,7 @@ class Svg2png {
     },
   );
 
-  private static idCounter = 0;
+  static idCounter = 0;
   private source: string;
   private id: number;
   private options: IConfig;
@@ -58,13 +58,13 @@ class Svg2png {
     }
   }
 
-  static debug(date: number, id: number, ...args: any[]) {
-    console.log(`[SVG2PNG:${id}:${date}]`,...args);
+  static debug(id: number, msg: string, meta?: object) {
+    console.log(`[SVG2PNG:${id}]`, msg, meta || '');
   }
 
-  log(...args: any[]): void {
+  log(msg: string, meta?: object): void {
     if (this.options.debug) {
-      Svg2png.debug(this.id, +(new Date()), ...args);
+      Svg2png.debug(this.id, msg, meta);
     }
   }
 
@@ -89,13 +89,15 @@ class Svg2png {
       }, this.options.conversionTimeout || 30000);
 
       try {
+        this.log('calling "pool.use"');
         const buffer = await Svg2png.pool.use(browser => fn(browser));
         clearTimeout(timeoutHandle);
-        this.log('success. closing page');
+        this.log('closing page');
         await this.closePage();
         resolve(buffer);
       } catch (err) {
         try {
+          this.log('ERROR: clearing timeout and closing page:', { error: err });
           clearTimeout(timeoutHandle);
           await this.closePage();
         } catch (e) {}
@@ -315,7 +317,10 @@ class Svg2png {
 
 function svg2png(config: IConfig): Promise<Buffer> {
   const s2pInstance = new Svg2png(config);
-  return s2pInstance.convert();
+  return s2pInstance.convert().then((result) => {
+    s2pInstance.log('success');
+    return result;
+  });
 }
 
 export {
