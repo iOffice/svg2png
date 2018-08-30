@@ -18,6 +18,7 @@ interface IConfig extends Partial<IDimensions> {
 }
 
 class Svg2png {
+  private static idCounter = 0;
   static pages: { [key: number]: Page } = {};
   static pool: Pool<Browser> = createPuppeteerPool(
     {
@@ -33,10 +34,10 @@ class Svg2png {
     },
   );
 
-  static idCounter = 0;
   private source: string;
   private id: number;
   private options: IConfig;
+  private history: ([string, any] | string)[] = [];
 
   constructor(config: IConfig) {
     this.id = ++Svg2png.idCounter;
@@ -49,6 +50,10 @@ class Svg2png {
     this.options = opt;
   }
 
+  /**
+   * Needs to be called if we wish the server to properly shut down. If the pool
+   * remains open then node won't be able to exit.
+   */
   static async closePool(): Promise<undefined> {
     try {
       await Svg2png.pool.drain();
@@ -58,28 +63,51 @@ class Svg2png {
     }
   }
 
+  /**
+   * Overwrite in your program to debug messages.
+   * @param id: The id of the drawing
+   * @param msg: The message provided by svg2png
+   * @param meta: Any optional metadata provided along with the message.
+   */
   static debug(id: number, msg: string, meta?: object) {
     console.log(`[SVG2PNG:${id}]`, msg, meta || '');
   }
 
-  log(msg: string, meta?: object): void {
+  /**
+   * For debugging purposes only. In case of a failure the conversion will reject with the
+   * history.
+   */
+  private log(msg: string, meta?: object): void {
+    this.history.push(meta ? [msg, meta] : msg);
     if (this.options.debug) {
       Svg2png.debug(this.id, msg, meta);
     }
   }
 
-  failure(msg: string | Error): Promise<any> {
-    if (typeof msg === 'string') {
-      this.log(`FAILURE: ${msg}`);
-      return Promise.reject(new Error(msg));
-    } else {
-      this.log(`FAILURE: ${msg.message}`, { error: msg });
-      return Promise.reject(msg);
-    }
+  /**
+   * To be used when rejecting a promise. Note that this will log the failure.
+   */
+  private failure(msg: Error): Promise<any> {
+    this.log(`[FAILURE]: ${msg.message}`, { error: msg });
+    return Promise.reject(msg);
   }
 
-  convert(): Promise<Buffer> {
-    return this.convertInBrowser(this.rasterize.bind(this));
+  /**
+   * Convert the svg.
+   */
+  async convert(): Promise<Buffer> {
+    try {
+      const result = await this.convertInBrowser(this.rasterize.bind(this));
+      this.log('SVG2PNG::success');
+      return result;
+    } catch (err) {
+      this.log('SVG2PNG::failure', { error: err });
+      err.meta = {
+        id: this.id,
+        history: this.history,
+      };
+      return Promise.reject(err);
+    }
   }
 
   private convertInBrowser(fn: (browser: Browser) => any): Promise<Buffer> {
@@ -88,38 +116,34 @@ class Svg2png {
         if (Svg2png.pages[this.id]) {
           Svg2png.pages[this.id].close();
           delete Svg2png.pages[this.id];
-          reject(new Error('timeout rasterizing SVG'));
+          return reject(new Error('timeout rasterizing SVG'));
         }
-        reject(new Error('this should not have been called, did you cancel the timeout?'));
+        reject(new Error('timeout was not cancelled'));
       }, this.options.conversionTimeout || 30000);
 
-      let buffer;
+      let buffer: Buffer;
       try {
-        this.log('calling "pool.use"');
+        this.log('starting conversion');
         buffer = await Svg2png.pool.use(browser => fn(browser));
-        clearTimeout(timeoutHandle);
       } catch (err) {
-        this.log('ERROR', { error: err });
-        this.log('clearing timeout');
-        clearTimeout(timeoutHandle);
-        try {
-          this.log('closing page');
-          await this.closePage();
-        } catch (e) {
-          this.log('failed to close page:', { error: e });
-        }
-        this.log('conversion failed');
+        this.cleanUp(timeoutHandle);
         return reject(err);
       }
 
-      try {
-        this.log('closing page');
-        await this.closePage();
-      } catch (e) {
-        this.log('failed to close page:', { error: e });
-      }
+      this.cleanUp(timeoutHandle);
       resolve(buffer);
     });
+  }
+
+  private async cleanUp(timeoutHandle: NodeJS.Timer): Promise<void> {
+    this.log('clearing timeout');
+    clearTimeout(timeoutHandle);
+    try {
+      this.log('closing page');
+      await this.closePage();
+    } catch (err) {
+      this.log('failed to close page', { error: err });
+    }
   }
 
   /**
@@ -131,26 +155,27 @@ class Svg2png {
       this.log('requesting a page');
       const page = await browser.newPage();
       Svg2png.pages[this.id] = page;
-      this.log(`navigating to ${this.source}`);
+      this.log(`navigating to page`, { url: this.source });
       const resp = await page.goto(this.source, {
         waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
         timeout: this.options.navigationTimeout,
       });
       if (!resp) {
-        return this.failure('obtained null response from `page.goto`');
+        return this.failure(new Error('obtained null response from `page.goto`'));
       }
       if (!resp.ok()) {
-        return this.failure(`navigation status: ${resp.status()}`);
+        return this.failure(new Error(`navigation status: ${resp.status()}`));
       }
       return page;
     } catch (err) {
-      return this.failure(`unknown loadPage error: ${err.message}`);
+      err.message = `Unknown loadPage error: ${err.message}`;
+      return this.failure(err);
     }
   }
 
   private async setGetDimensions(page: Page): Promise<{ width: number, height: number}> {
     try {
-      this.log('setting dimensions: ', {
+      this.log('setting dimensions', {
         width: this.options.width,
         height: this.options.height,
         scale: this.options.scale,
@@ -158,21 +183,22 @@ class Svg2png {
       const actions = await this.setDimensions(page, this.options);
       this.log(`actions taken: ${actions.join(', ')}.`);
     } catch (err) {
-      this.log(`failed to set dimensions: ${err}`);
+      this.log(`failed to set dimensions`, { error: err });
     }
 
     try {
       this.log('getting dimensions');
       const dimensions = await this.getDimensions(page);
       if (!dimensions) {
-        return Promise.reject(new Error('unable to obtain the dimensions'));
+        return this.failure(new Error('unable to obtain the dimensions'));
       }
       return {
         width: Math.round(dimensions.width),
         height: Math.round(dimensions.height),
       };
     } catch (err) {
-      return this.failure(`unknown setGetDimensions error: ${err.message}`);
+      err.message = `unknown setGetDimensions error: ${err.message}`;
+      return this.failure(err);
     }
   }
 
@@ -228,7 +254,7 @@ class Svg2png {
         const buffer = await sharp(screenshot).raw().toBuffer();
         chunks.push(buffer);
       } catch (err) {
-        this.log('chunk collection failure', { error: err });
+        err.message = `chunk collection failure: ${err.message}`;
         return this.failure(err);
       }
     }
@@ -247,7 +273,7 @@ class Svg2png {
         },
       }).png().toBuffer();
     } catch (err) {
-      this.log('sharp failure', { error: err });
+      err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
     }
   }
@@ -255,7 +281,7 @@ class Svg2png {
   /**
    * Close the page associated with this Svg2Png instance.
    */
-  closePage(): Promise<void> {
+  private closePage(): Promise<void> {
     const page = Svg2png.pages[this.id];
     if (page) {
       delete Svg2png.pages[this.id];
@@ -341,16 +367,9 @@ class Svg2png {
   }
 }
 
-async function svg2png(config: IConfig): Promise<Buffer> {
+function svg2png(config: IConfig): Promise<Buffer> {
   const s2pInstance = new Svg2png(config);
-  try {
-    const result = s2pInstance.convert();
-    s2pInstance.log('SVG2PNG::success');
-    return result;
-  } catch (err) {
-    s2pInstance.log('SVG2PNG::failure', { error: err });
-    return Promise.reject(err);
-  }
+  return s2pInstance.convert();
 }
 
 export {
