@@ -17,6 +17,8 @@ interface IConfig extends Partial<IDimensions> {
   debug?: boolean;
 }
 
+enum Status { NOT_STARTED, PENDING, DONE, FAILED }
+
 class Svg2png {
   private static idCounter = 0;
   static pages: { [key: number]: Page } = {};
@@ -38,6 +40,7 @@ class Svg2png {
   private id: number;
   private options: IConfig;
   private history: ([string, any] | string)[] = [];
+  private status = Status.NOT_STARTED;
 
   constructor(config: IConfig) {
     this.id = ++Svg2png.idCounter;
@@ -98,10 +101,12 @@ class Svg2png {
   async convert(): Promise<Buffer> {
     try {
       const result = await this.convertInBrowser(this.rasterize.bind(this));
+      this.status = Status.DONE;
       this.log('SVG2PNG::success');
       return result;
     } catch (err) {
-      this.log('SVG2PNG::failure', { error: err });
+      this.status = Status.FAILED;
+      this.log('SVG2PNG::failure', { error: err.message });
       err.meta = {
         id: this.id,
         history: this.history,
@@ -112,18 +117,24 @@ class Svg2png {
 
   private convertInBrowser(fn: (browser: Browser) => any): Promise<Buffer> {
     return new Promise(async (resolve, reject) => {
+      const timeout = this.options.conversionTimeout || 30000;
+      this.log('setting timeout', { conversionId: this.id, timeout });
       const timeoutHandle = setTimeout(() => {
         if (Svg2png.pages[this.id]) {
           Svg2png.pages[this.id].close();
           delete Svg2png.pages[this.id];
-          return reject(new Error('timeout rasterizing SVG'));
+          return reject(new Error(`timeout rasterizing SVG ${this.id} after ${timeout}ms`));
         }
-        reject(new Error('timeout was not cancelled'));
-      }, this.options.conversionTimeout || 30000);
+        if (this.status === Status.NOT_STARTED) {
+          reject(new Error(`conversionId[${this.id}] timed out before it could use the browser`));
+        } else {
+          reject(new Error(`timeout was not cancelled for conversionId[${this.id}]`));
+        }
+      }, timeout);
 
       let buffer: Buffer;
       try {
-        this.log('starting conversion');
+        this.log('requesting browser for conversion', this.options);
         buffer = await Svg2png.pool.use(browser => fn(browser));
       } catch (err) {
         this.cleanUp(timeoutHandle);
@@ -155,6 +166,7 @@ class Svg2png {
       this.log('requesting a page');
       const page = await browser.newPage();
       Svg2png.pages[this.id] = page;
+      this.status = Status.PENDING;
       this.log(`navigating to page`, { url: this.source });
       const resp = await page.goto(this.source, {
         waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
@@ -204,6 +216,7 @@ class Svg2png {
 
   private async rasterize(browser: Browser): Promise<Buffer> {
     try {
+      this.log('starting conversion');
       const page = await this.loadPage(browser);
       const { width, height } = await this.setGetDimensions(page);
       this.log(`setting viewport to [${width}, ${height}]`);
@@ -373,6 +386,7 @@ function svg2png(config: IConfig): Promise<Buffer> {
 }
 
 export {
+  Status,
   IDimensions,
   IConfig,
   Svg2png,
