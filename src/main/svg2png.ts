@@ -90,9 +90,9 @@ class Svg2png {
   /**
    * To be used when rejecting a promise. Note that this will log the failure.
    */
-  private failure(msg: Error): Promise<any> {
-    this.log(`[FAILURE]: ${msg.message}`, { error: msg });
-    return Promise.reject(msg);
+  private failure(err: Error): Promise<any> {
+    this.log(`[FAILURE]: ${err.message}`);
+    return Promise.reject(err);
   }
 
   /**
