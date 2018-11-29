@@ -9,6 +9,8 @@ interface IPuppeteerPoolConfig {
 }
 
 const USE_COUNT = Symbol('useCount');
+const ID = Symbol('identifier');
+let browserId = 0;
 
 /**
  * Originally a fork of https://github.com/latesh/puppeteer-pool.
@@ -23,6 +25,7 @@ function createPuppeteerPool(
       try {
         const browser = await puppeteer.launch(puppeteerlaunchOptions);
         browser[USE_COUNT] = 0;
+        browser[ID] = ++browserId;
         return browser;
       } catch (err) {
         return Promise.reject(err);
@@ -76,5 +79,8 @@ function createPuppeteerPool(
 }
 
 export {
+  USE_COUNT,
+  ID,
+  IPuppeteerPoolConfig,
   createPuppeteerPool,
 };

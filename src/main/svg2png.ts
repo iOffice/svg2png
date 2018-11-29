@@ -4,24 +4,75 @@ import * as sharp from 'sharp';
 import { createPuppeteerPool } from './puppeteer-pool';
 import fileUrl = require('file-url');
 
+/**
+ * An interface to help us specify the dimensions of an svg object.
+ */
 interface IDimensions {
+  /**
+   * The width of the svg. In pixels.
+   */
   width: number;
+
+  /**
+   * The height of the svg. In pixels.
+   */
   height: number;
+
+  /**
+   * A scale factor to expand or shrink the svg.
+   */
   scale: number;
 }
 
+/**
+ * A configuration interface to use in the `svg2png` function.
+ */
 interface IConfig extends Partial<IDimensions> {
+  /**
+   * The url of the svg to convert.
+   */
   url: string;
+
+  /**
+   * A limit on the allowed time to load the svg in the browser.
+   */
   navigationTimeout?: number;
+
+  /**
+   * A limit of the allowed time to spend on the conversion.
+   */
   conversionTimeout?: number;
+
+  /**
+   * If `true`, console messages will be printed specifying the actions taken during the
+   * conversion.
+   */
   debug?: boolean;
 }
 
+/**
+ * The possible status of a conversion.
+ */
 enum Status { NOT_STARTED, PENDING, DONE, FAILED }
 
+/**
+ * To convert an SVG to PNG we use a headless browser. Creating and destroying browsers can be
+ * an expensive operation. For this reason we use a pool that manages these resources.
+ *
+ * This class has several static properties. One property we need to be aware of is `pool`. The
+ * moment this class gets loaded in node it will create the pool so that `Svg2png` can start
+ * the conversions. You will have to use `Svg2png.closePool()` at the end of the lifecycle of your
+ * application or testing. Failure to do so result in your application not terminating.
+ */
 class Svg2png {
-  private static idCounter = 0;
+  /**
+   * A map containing all the browser pages opened.
+   */
   static pages: { [key: number]: Page } = {};
+
+  /**
+   * A pool of browsers.
+   */
   static pool: Pool<Browser> = createPuppeteerPool(
     {
       maxUses: 50,
@@ -36,6 +87,7 @@ class Svg2png {
     },
   );
 
+  private static idCounter = 0;
   private source: string;
   private id: number;
   private options: IConfig;
