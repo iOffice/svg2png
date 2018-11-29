@@ -57,12 +57,9 @@ enum Status { NOT_STARTED, PENDING, DONE, FAILED }
 
 /**
  * To convert an SVG to PNG we use a headless browser. Creating and destroying browsers can be
- * an expensive operation. For this reason we use a pool that manages these resources.
- *
- * This class has several static properties. One property we need to be aware of is `pool`. The
- * moment this class gets loaded in node it will create the pool so that `Svg2png` can start
- * the conversions. You will have to use `Svg2png.closePool()` at the end of the lifecycle of your
- * application or testing. Failure to do so result in your application not terminating.
+ * an expensive operation. For this reason we use a pool that manages these resources. Note that
+ * if the `svg2png` function is used at least once we will need to call `Svg2png.closePool`
+ * if we want our application or tests to finish properly.
  */
 class Svg2png {
   /**
@@ -70,23 +67,7 @@ class Svg2png {
    */
   static pages: { [key: number]: Page } = {};
 
-  /**
-   * A pool of browsers.
-   */
-  static pool: Pool<Browser> = createPuppeteerPool(
-    {
-      maxUses: 50,
-      validator: () => Promise.resolve(true),
-    }, {
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    }, {
-      min: 1,
-      max: 2,
-      idleTimeoutMillis: 5000,
-      testOnBorrow: true,
-    },
-  );
-
+  private static pool?: Pool<Browser>;
   private static idCounter = 0;
   private source: string;
   private id: number;
@@ -106,10 +87,33 @@ class Svg2png {
   }
 
   /**
+   * Returns the singleton pool of browsers.
+   */
+  static getPool(): Pool<Browser> {
+    if (!Svg2png.pool) {
+      Svg2png.pool = createPuppeteerPool(
+        {
+          maxUses: 1,
+          validator: () => Promise.resolve(true),
+        }, {
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        }, {
+          min: 1,
+          max: 2,
+          idleTimeoutMillis: 5000,
+          testOnBorrow: true,
+        },
+      );
+    }
+    return Svg2png.pool;
+  }
+
+  /**
    * Needs to be called if we wish the server to properly shut down. If the pool
    * remains open then node won't be able to exit.
    */
   static async closePool(): Promise<undefined> {
+    if (!Svg2png.pool) return;
     try {
       await Svg2png.pool.drain();
       await Svg2png.pool.clear();
@@ -187,7 +191,7 @@ class Svg2png {
       let buffer: Buffer;
       try {
         this.log('requesting browser for conversion', this.options);
-        buffer = await Svg2png.pool.use(browser => fn(browser));
+        buffer = await Svg2png.getPool().use(browser => fn(browser));
       } catch (err) {
         this.cleanUp(timeoutHandle);
         return reject(err);
