@@ -36,9 +36,11 @@ function createPuppeteerPool(
       return undefined;
     },
     async validate(browser: Browser) {
+      const maxUses = config.maxUses || 1;
+      const validator = config.validator || (() => Promise.resolve(true));
       try {
-        const valid = await config.validator(browser);
-        return valid && (config.maxUses <= 0 || browser[USE_COUNT] < config.maxUses);
+        const valid = await validator(browser);
+        return valid && (maxUses <= 0 || browser[USE_COUNT] < maxUses);
       } catch (err) {
         return Promise.reject(err);
       }

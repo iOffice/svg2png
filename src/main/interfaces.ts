@@ -1,8 +1,41 @@
-import { Browser } from 'puppeteer';
+import { Options } from 'generic-pool';
+import { Browser, LaunchOptions } from 'puppeteer';
 
+/**
+ * Custom configuration to control how the pool of browser will behave.
+ */
 interface IPuppeteerPoolConfig {
-  maxUses: number;
-  validator: (instance: Browser) => Promise<boolean>;
+  /**
+   * The amount of times a browser will be used before the pool discards it.
+   */
+  maxUses?: number;
+
+  /**
+   * A function that should resolve to a boolean specifying if the browser should be used or not.
+   *
+   * @param instance The browser in question.
+   */
+  validator?: (instance: Browser) => Promise<boolean>;
+}
+
+/**
+ * A configuration object that can be used to initialize the pool of browsers.
+ */
+interface ISvg2pngPoolConfig {
+  /**
+   * Our custom configuration which is used to specify the maximum number of uses for each browser.
+   */
+  config: IPuppeteerPoolConfig;
+
+  /**
+   * The options to be used when a new browser gets launched.
+   */
+  puppeteerlaunchOptions: LaunchOptions;
+
+  /**
+   * Pool configuration.
+   */
+  genericPoolConfig: Options;
 }
 
 /**
@@ -55,4 +88,5 @@ export {
   IConfig,
   IDimensions,
   IPuppeteerPoolConfig,
+  ISvg2pngPoolConfig,
 };

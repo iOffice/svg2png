@@ -3,7 +3,7 @@ import { Pool } from 'generic-pool';
 import { Browser, Page } from 'puppeteer';
 import * as sharp from 'sharp';
 
-import { IConfig, IDimensions } from './interfaces';
+import { IConfig, IDimensions, ISvg2pngPoolConfig } from './interfaces';
 import { createPuppeteerPool } from './puppeteer-pool';
 
 /**
@@ -23,6 +23,22 @@ class Svg2png {
    */
   static pages: { [key: number]: Page } = {};
 
+  // Default configuration. Can be overriden by using `Svg2Png.setPoolConfig`.
+  private static configuration: ISvg2pngPoolConfig = {
+    config: {
+      maxUses: 1,
+      validator: () => Promise.resolve(true),
+    },
+    puppeteerlaunchOptions: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    },
+    genericPoolConfig: {
+      min: 1,
+      max: 2,
+      idleTimeoutMillis: 5000,
+      testOnBorrow: true,
+    },
+  };
   private static pool?: Pool<Browser>;
   private static idCounter = 0;
   private source: string;
@@ -43,22 +59,46 @@ class Svg2png {
   }
 
   /**
-   * Returns the singleton pool of browsers.
+   * To be used before any call to `svg2png`. This will override the settings used to create the
+   * singleton pool of browsers.
+   *
+   * @param options The options object for the pool.
    */
-  static getPool(): Pool<Browser> {
+  static setPoolConfig(options: ISvg2pngPoolConfig) {
     if (!Svg2png.pool) {
-      Svg2png.pool = createPuppeteerPool(
-        {
+      this.configuration = {
+        config: {
+          ...options.config,
           maxUses: 1,
           validator: () => Promise.resolve(true),
-        }, {
+        },
+        puppeteerlaunchOptions: {
+          ...options.puppeteerlaunchOptions,
           args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        }, {
+        },
+        genericPoolConfig: {
+          ...options.genericPoolConfig,
           min: 1,
           max: 2,
           idleTimeoutMillis: 5000,
           testOnBorrow: true,
         },
+      };
+    } else {
+      throw new Error('The pool has already been initialized, it is too late to set the options');
+    }
+  }
+
+  /*
+   * Returns the singleton pool of browsers. This is made as a method so that we only create
+   * a pool the moment we need it. (trying to avoid side effects from loading the file).
+   */
+  private static getPool(): Pool<Browser> {
+    if (!Svg2png.pool) {
+      Svg2png.pool = createPuppeteerPool(
+        Svg2png.configuration.config,
+        Svg2png.configuration.puppeteerlaunchOptions,
+        Svg2png.configuration.genericPoolConfig,
       );
     }
     return Svg2png.pool;
