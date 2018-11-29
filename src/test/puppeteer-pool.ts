@@ -1,7 +1,8 @@
-import { createPuppeteerPool, ID } from '../main';
+import { expect } from 'chai';
 import { Pool } from 'generic-pool';
 import { Browser } from 'puppeteer';
-import { expect } from 'chai';
+
+import { ID, createPuppeteerPool } from '../main';
 import { pause } from './util';
 
 describe('puppeteer-pool', () => {

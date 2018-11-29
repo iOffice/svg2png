@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@ioffice/tc-builder": "3.0.0",
-    "@ioffice/tslint-config-ioffice": "0.5.0",
+    "@ioffice/tslint-config-ioffice": "0.6.1",
     "@types/chai": "4.1.4",
     "@types/debug": "^0.0.30",
     "@types/file-url": "2.0.0",
@@ -56,8 +56,8 @@
     "semver": "5.5.0",
     "sinon": "6.0.1",
     "streamifier": "0.1.1",
-    "tslint": "5.10.0",
-    "tslint-eslint-rules": "5.3.1",
+    "tslint": "5.11.0",
+    "tslint-eslint-rules": "5.4.0",
     "typedoc": "0.11.1",
     "typescript": "2.9.2"
   },

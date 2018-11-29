@@ -1,13 +1,13 @@
+import { expect } from 'chai';
 import * as fs from 'fs';
 import * as path from 'path';
-import { expect } from 'chai';
-import { ITest, normalizeTests, pngCompare } from './util';
+
 import { svg2png } from '../main/svg2png';
+import { ITest, normalizeTests, pngCompare } from './util';
 
 const rel = (x: string) => path.resolve(__dirname, x);
 const successTests = normalizeTests(require('../../src/test/success-tests.json'));
 const failureTests = normalizeTests(require('../../src/test/failure-tests.json'));
-
 
 describe('async', () => {
   describe('should fulfill', () => successTests.forEach(successTest));

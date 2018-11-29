@@ -1,9 +1,9 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import { Stream } from 'stream';
 import fileURL = require('file-url');
+import * as fs from 'fs';
 import { ReadStream } from 'fs';
+import * as path from 'path';
 import { PNG } from 'pngjs';
+import { Stream } from 'stream';
 
 const rel = (x: string) => path.resolve(__dirname, x);
 const streamifier = require('streamifier');
@@ -41,7 +41,6 @@ function normalizeTests(tests: ITest[]) {
     return normalized;
   });
 }
-
 
 function toStream(obj: StrBuffStream): Promise<ReadStream> {
   return new Promise((resolve, reject) => {

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { normalizeTests } from './util';
+
 import { Svg2png, svg2png } from '../main/svg2png';
+import { normalizeTests } from './util';
 
 const rel = (x: string) => path.resolve(__dirname, x);
 const tests = normalizeTests(require('../../src/test/success-tests.json'));

@@ -1,12 +1,9 @@
-import { Browser, LaunchOptions } from 'puppeteer';
-import { Pool, Options, Factory } from 'generic-pool';
-import * as puppeteer from 'puppeteer';
+import { Factory, Options, Pool } from 'generic-pool';
 import * as genericPool from 'generic-pool';
+import { Browser, LaunchOptions } from 'puppeteer';
+import * as puppeteer from 'puppeteer';
 
-interface IPuppeteerPoolConfig {
-  maxUses: number;
-  validator: (instance: Browser) => Promise<boolean>;
-}
+import { IPuppeteerPoolConfig } from './interfaces';
 
 const USE_COUNT = Symbol('useCount');
 const ID = Symbol('identifier');
