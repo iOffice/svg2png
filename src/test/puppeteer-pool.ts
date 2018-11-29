@@ -2,6 +2,7 @@ import { createPuppeteerPool, ID } from '../main';
 import { Pool } from 'generic-pool';
 import { Browser } from 'puppeteer';
 import { expect } from 'chai';
+import { pause } from './util';
 
 describe('puppeteer-pool', () => {
   let pool: Pool<Browser>;
@@ -88,6 +89,76 @@ describe('puppeteer-pool', () => {
     }
     throw new Error('The browser should have been used only 2 times and failed on the 3rd use');
   });
+
+  /**
+   * This example shows the dangers of having references to out of scope objects within functions.
+   * Notice how `obj` will change after the pause due to the timeout executing and changing the
+   * value.
+   */
+  it('timeouts can be dangerous', async () => {
+    let obj: number | undefined = 1;
+
+    async function mainTask(): Promise<void> {
+      expect(obj).to.eq(1);
+      // Waiting for longer than the timeout so that it can modify `obj`.
+      await pause(150);
+      expect(obj).to.eq(undefined);
+    }
+
+    setTimeout(() => {
+      // We want the mainTask function to stop. This is not the way to do it.
+      obj = undefined;
+    }, 100);
+
+    await mainTask();
+  });
+
+  /**
+   * In this continuation we show a happy path. That is, the pause is small enough that the timeout
+   * does not execute until after we have checked the value.
+   */
+  it('timeouts can be dangerous - Part 2', async () => {
+    let obj: number | undefined = 1;
+
+    async function mainTask(): Promise<void> {
+      expect(obj).to.eq(1);
+      // If we wait less than the timeout nothing should have changed.
+      await pause(50);
+      expect(obj).to.eq(1);
+    }
+
+    setTimeout(() => {
+      // We want the mainTask function to stop. This is not the way to do it.
+      obj = undefined;
+    }, 100);
+
+    await mainTask();
+  });
+
+  /**
+   * If we must use global objects we need to check for the values of the global objects before we
+   * use them. Typescript cannot help us here. Or can it? Currently we are using typescript 2.9.
+   */
+  it('timeouts can be dangerous - fix?', async () => {
+    let obj: number | undefined = 1;
+
+    async function mainTask(): Promise<void> {
+      expect(obj).to.eq(1);
+      // Waiting for longer than the timeout so that it can modify `obj`.
+      await pause(150);
+      if (obj !== undefined) {
+        // Timeout did not execute... proceed...
+      } else {
+        // Out of luck, timeout executed and now we don't have the object.
+      }
+      expect(obj).to.eq(undefined);
+    }
+
+    setTimeout(() => {
+      // We want the mainTask function to stop. This is not the way to do it.
+      obj = undefined;
+    }, 100);
+
+    await mainTask();
+  });
 });
-
-
