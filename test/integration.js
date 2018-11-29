@@ -12,8 +12,8 @@ chai.use(chaiAsPromised);
 const expect = require("chai").expect;
 
 const normalizeTests = require("./normalize-tests.js");
-const successTests = normalizeTests(require("./success-tests/tests.json"));
-const failureTests = normalizeTests(require("./failure-tests.json"));
+const successTests = normalizeTests(require("../src/test/success-tests.json"));
+const failureTests = normalizeTests(require("../src/test/failure-tests.json"));
 
 describe("async", () => {
     describe("should fulfill", () => successTests.forEach(successTest));

@@ -1,0 +1,26 @@
+{
+  "extends": "./node_modules/@ioffice/tslint-config-ioffice/tsconfig.core.json",
+  "compilerOptions": {
+    "declaration": true,
+    "outDir": "./build",
+    "baseUrl": ".",
+    "paths": {
+    },
+    "lib": [
+      "dom",
+      "es6"
+    ],
+    "rootDir": "src",
+    "target": "es5"
+  },
+  "files": [
+    "src/main/index.ts",
+    "src/main/svg2png-cli.ts",
+    "src/test/index.ts",
+    "src/test/rebaseline.ts"
+  ],
+  "exclude": [
+    "build",
+    "node_modules"
+  ]
+}

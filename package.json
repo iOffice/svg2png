@@ -1,36 +1,68 @@
 {
-  "name": "svg2png",
+  "name": "@ioffice/svg2png",
   "description": "Converts SVGs to PNGs, using Chromium",
-  "version": "4.1.1",
-  "author": "Domenic Denicola <d@domenic.me> (https://domenic.me)",
-  "license": "WTFPL",
-  "repository": "domenic/svg2png",
-  "main": "lib/svg2png.js",
-  "bin": "bin/svg2png-cli.js",
-  "files": [
-    "lib/",
-    "bin/"
+  "version": "0.0.1",
+  "author": "Orignal Author: Domenic Denicola (https://domenic.me)",
+  "contributors": [
+    "iOFFICE"
   ],
+  "license": "WTFPL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iOffice/svg2png.git"
+  },
+  "main": "index.js",
+  "bin": "svg2png-cli.js",
   "scripts": {
     "test": "mocha",
-    "rebaseline": "node test/success-tests/rebaseline.js",
-    "lint": "eslint lib test"
+    "rebaseline": "node test/success-tests/rebaseline.js"
   },
   "dependencies": {
     "file-url": "^2.0.0",
-    "pn": "^1.0.0",
-    "puppeteer": "^1.0.0",
-    "puppeteer-pool": "iOffice/puppeteer-pool#f38a064",
+    "generic-pool": "^3.4.2",
+    "puppeteer": "1.7.0",
     "sharp": "^0.19.0",
-    "tmp": "0.0.33",
+    "tslib": "^1.9.3",
     "yargs": "^6.5.0"
   },
   "devDependencies": {
-    "chai": "^3.5.0",
-    "chai-as-promised": "^6.0.0",
-    "eslint": "^3.12.2",
+    "@ioffice/tc-builder": "3.0.0",
+    "@ioffice/tslint-config-ioffice": "0.6.1",
+    "@types/chai": "4.1.4",
+    "@types/debug": "^0.0.30",
+    "@types/file-url": "2.0.0",
+    "@types/generic-pool": "^3.1.2",
+    "@types/mocha": "5.2.3",
+    "@types/pngjs": "3.3.2",
+    "@types/progress": "2.0.1",
+    "@types/puppeteer": "1.5.0",
+    "@types/request-promise": "4.1.41",
+    "@types/semver": "5.5.0",
+    "@types/sharp": "0.17.9",
+    "@types/sinon": "5.0.1",
+    "@types/tmp": "0.0.33",
+    "@types/yargs": "11.0.0",
+    "chai": "4.1.2",
+    "colors": "1.3.0",
     "mkdirp": "^0.5.1",
-    "mocha": "^3.2.0",
-    "rimraf": "^2.5.4"
+    "mocha": "5.2.0",
+    "moment": "2.22.2",
+    "pngjs": "3.3.3",
+    "progress": "2.0.0",
+    "request": "2.87.0",
+    "request-promise": "4.2.2",
+    "request-promise-core": "1.1.1",
+    "rimraf": "^2.5.4",
+    "semver": "5.5.0",
+    "sinon": "6.0.1",
+    "streamifier": "0.1.1",
+    "tslint": "5.11.0",
+    "tslint-eslint-rules": "5.4.0",
+    "typedoc": "0.11.1",
+    "typescript": "2.9.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.com"
   }
 }

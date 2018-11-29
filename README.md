@@ -70,3 +70,6 @@ Options:
 ## Node.js requirements
 
 svg2png uses the latest in ES2017 features, and as such requires a recent version of Node.js. Only the 8.x series onward is supported.
+
+## TODO:
+Create the tests for the cli
