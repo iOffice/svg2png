@@ -110,10 +110,30 @@ async function pngCompare(obj1: StrBuffStream, obj2: StrBuffStream) {
   };
 }
 
+/**
+ * Utility function to simulate doing nothing for a set number of milliseconds. Use in an async
+ * function as follows:
+ *
+ * ```
+ * await pause(1000);
+ * ```
+ *
+ * That would halt the execution for 1 second.
+ *
+ * @param time The number of milliseconds to wait.
+ */
+function pause(time: number): Promise<void> {
+  return new Promise((r) => {
+    setTimeout(() => {
+      r();
+    }, time);
+  });
+}
 
 export {
   ITest,
   normalizeTests,
   toStream,
   pngCompare,
+  pause,
 };
