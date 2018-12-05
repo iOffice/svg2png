@@ -116,7 +116,7 @@ class Svg2png {
    * @param reason Provide a reason as to why the conversion was cancelled.
    */
   private cancelConversion(reason: string) {
-    if (!this.cancellingReason) {
+    if (!this.cancellingReason && this.status !== Status.CANCELLED) {
       this.cancellingReason = reason;
       this.status = Status.CANCELLED;
     } else {
@@ -223,18 +223,14 @@ class Svg2png {
         this.log('requesting browser for conversion', this.options);
         buffer = await Svg2png.getPool().use(browser => fn(browser));
       } catch (err) {
-        this.cleanUp(timeoutHandle);
+        this.log('clearing timeout due to caught error');
+        clearTimeout(timeoutHandle);
         return reject(err);
       }
-
-      this.cleanUp(timeoutHandle);
+      this.log('clearing timeout');
+      clearTimeout(timeoutHandle);
       resolve(buffer);
     });
-  }
-
-  private async cleanUp(timeoutHandle: NodeJS.Timer): Promise<void> {
-    this.log('clearing timeout');
-    clearTimeout(timeoutHandle);
   }
 
   /**
@@ -245,26 +241,30 @@ class Svg2png {
     try {
       this.log('requesting a page');
       const page = await browser.newPage();
-      this.status = Status.PENDING;
       await this.throwIfCancelled(page);
 
+      this.status = Status.PENDING;
       this.log(`navigating to page`, { url: this.source });
-      const resp = await page.goto(this.source, {
-        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
-        timeout: this.options.navigationTimeout,
-      });
-      if (!resp) {
-        return this.failure(new Error('obtained null response from `page.goto`'));
-      }
-      if (!resp.ok()) {
-        return this.failure(new Error(`navigation status: ${resp.status()}`));
-      }
+      await this.navigateToSource(page);
       await this.throwIfCancelled(page);
 
       return page;
     } catch (err) {
       err.message = `Unknown loadPage error: ${err.message}`;
       return this.failure(err);
+    }
+  }
+
+  private async navigateToSource(page: Page): Promise<void> {
+    const resp = await page.goto(this.source, {
+      waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+      timeout: this.options.navigationTimeout,
+    });
+    if (!resp) {
+      return this.failure(new Error('obtained null response from `page.goto`'));
+    }
+    if (!resp.ok()) {
+      return this.failure(new Error(`navigation status: ${resp.status()}`));
     }
   }
 
