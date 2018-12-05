@@ -20,7 +20,7 @@
   "dependencies": {
     "file-url": "^2.0.0",
     "generic-pool": "^3.4.2",
-    "puppeteer": "1.7.0",
+    "puppeteer": "1.11.0",
     "sharp": "^0.19.0",
     "tslib": "^1.9.3",
     "yargs": "^6.5.0"
@@ -35,7 +35,7 @@
     "@types/mocha": "5.2.3",
     "@types/pngjs": "3.3.2",
     "@types/progress": "2.0.1",
-    "@types/puppeteer": "1.5.0",
+    "@types/puppeteer": "1.11.1",
     "@types/request-promise": "4.1.41",
     "@types/semver": "5.5.0",
     "@types/sharp": "0.17.9",
