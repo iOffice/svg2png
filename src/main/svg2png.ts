@@ -9,7 +9,7 @@ import { createPuppeteerPool } from './puppeteer-pool';
 /**
  * The possible status of a conversion.
  */
-enum Status { NOT_STARTED, PENDING, DONE, FAILED }
+enum Status { NOT_STARTED, PENDING, DONE, FAILED, CANCELLED }
 
 /**
  * To convert an SVG to PNG we use a headless browser. Creating and destroying browsers can be
@@ -18,11 +18,6 @@ enum Status { NOT_STARTED, PENDING, DONE, FAILED }
  * if we want our application or tests to finish properly.
  */
 class Svg2png {
-  /**
-   * A map containing all the browser pages opened.
-   */
-  static pages: { [key: number]: Page } = {};
-
   // Default configuration. Can be overriden by using `Svg2Png.setPoolConfig`.
   private static configuration: ISvg2pngPoolConfig = {
     config: {
@@ -39,6 +34,9 @@ class Svg2png {
       testOnBorrow: true,
     },
   };
+  // Keeping track of pages that fail to close. This will help us determine if we need to
+  // restart the server. Ids of the conversions will be appended to this array.
+  private static pageCloseErrors: number[] = [];
   private static pool?: Pool<Browser>;
   private static idCounter = 0;
   private source: string;
@@ -46,6 +44,7 @@ class Svg2png {
   private options: IConfig;
   private history: ([string, any] | string)[] = [];
   private status = Status.NOT_STARTED;
+  private cancellingReason = '';
 
   constructor(config: IConfig) {
     this.id = ++Svg2png.idCounter;
@@ -56,6 +55,13 @@ class Svg2png {
     }
     this.source = opt.url;
     this.options = opt;
+  }
+
+  /**
+   * Returns an array with the conversion ids that failed to close the browser page.
+   */
+  static getPageClosingFailures(): number[] {
+    return [...Svg2png.pageCloseErrors];
   }
 
   /**
@@ -102,6 +108,35 @@ class Svg2png {
       );
     }
     return Svg2png.pool;
+  }
+
+  /**
+   * Do not use `this.status = Status.CANCELLED`. Use this method instead.
+   *
+   * @param reason Provide a reason as to why the conversion was cancelled.
+   */
+  private cancelConversion(reason: string) {
+    if (!this.cancellingReason && this.status !== Status.CANCELLED) {
+      this.cancellingReason = reason;
+      this.status = Status.CANCELLED;
+    } else {
+      throw new Error('The conversion has already been cancelled');
+    }
+  }
+
+  /**
+   * There is a timeout that cancels the conversion. This does not halt the conversion operation,
+   * all it does it go back to the user to inform that the operation failed. For this reason we have
+   * to use this method after every `await` statement since that will give the timeout a chance to
+   * cancel the conversion. VERY IMPORTANT TO USE IT AFTER EVERY AWAIT.
+   */
+  private async throwIfCancelled(page?: Page) {
+    if (this.status === Status.CANCELLED) {
+      if (page && !page.isClosed()) {
+        await this.closePage(page);
+      }
+      throw new Error(`Conversion was cancelled: ${this.cancellingReason}`);
+    }
   }
 
   /**
@@ -172,16 +207,15 @@ class Svg2png {
       const timeout = this.options.conversionTimeout || 30000;
       this.log('setting timeout', { conversionId: this.id, timeout });
       const timeoutHandle = setTimeout(() => {
-        if (Svg2png.pages[this.id]) {
-          Svg2png.pages[this.id].close();
-          delete Svg2png.pages[this.id];
-          return reject(new Error(`timeout rasterizing SVG ${this.id} after ${timeout}ms`));
-        }
-        if (this.status === Status.NOT_STARTED) {
-          reject(new Error(`conversionId[${this.id}] timed out before it could use the browser`));
+        let errorMsg = '';
+        if (this.status === Status.PENDING) {
+          errorMsg = `timeout rasterizing SVG ${this.id} after ${timeout}ms`;
+        } else if (this.status === Status.NOT_STARTED) {
+          errorMsg = `conversionId[${this.id}] timeout after ${timeout}ms before it could use the browser`;
         } else {
-          reject(new Error(`timeout was not cancelled for conversionId[${this.id}]`));
+          errorMsg = `Developer ERROR: timeout not cancelled for conversionId[${this.id}]`;
         }
+        this.cancelConversion(errorMsg);
       }, timeout);
 
       let buffer: Buffer;
@@ -189,24 +223,14 @@ class Svg2png {
         this.log('requesting browser for conversion', this.options);
         buffer = await Svg2png.getPool().use(browser => fn(browser));
       } catch (err) {
-        this.cleanUp(timeoutHandle);
+        this.log('clearing timeout due to caught error');
+        clearTimeout(timeoutHandle);
         return reject(err);
       }
-
-      this.cleanUp(timeoutHandle);
+      this.log('clearing timeout');
+      clearTimeout(timeoutHandle);
       resolve(buffer);
     });
-  }
-
-  private async cleanUp(timeoutHandle: NodeJS.Timer): Promise<void> {
-    this.log('clearing timeout');
-    clearTimeout(timeoutHandle);
-    try {
-      this.log('closing page');
-      await this.closePage();
-    } catch (err) {
-      this.log('failed to close page', { error: err });
-    }
   }
 
   /**
@@ -217,23 +241,30 @@ class Svg2png {
     try {
       this.log('requesting a page');
       const page = await browser.newPage();
-      Svg2png.pages[this.id] = page;
+      await this.throwIfCancelled(page);
+
       this.status = Status.PENDING;
       this.log(`navigating to page`, { url: this.source });
-      const resp = await page.goto(this.source, {
-        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
-        timeout: this.options.navigationTimeout,
-      });
-      if (!resp) {
-        return this.failure(new Error('obtained null response from `page.goto`'));
-      }
-      if (!resp.ok()) {
-        return this.failure(new Error(`navigation status: ${resp.status()}`));
-      }
+      await this.navigateToSource(page);
+      await this.throwIfCancelled(page);
+
       return page;
     } catch (err) {
       err.message = `Unknown loadPage error: ${err.message}`;
       return this.failure(err);
+    }
+  }
+
+  private async navigateToSource(page: Page): Promise<void> {
+    const resp = await page.goto(this.source, {
+      waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
+      timeout: this.options.navigationTimeout,
+    });
+    if (!resp) {
+      return this.failure(new Error('obtained null response from `page.goto`'));
+    }
+    if (!resp.ok()) {
+      return this.failure(new Error(`navigation status: ${resp.status()}`));
     }
   }
 
@@ -266,13 +297,32 @@ class Svg2png {
     }
   }
 
+  private async closePage(page: Page) {
+    try {
+      await page.close();
+    } catch (err) {
+      // If for some reason the browser is stuck and it fails to close we will let it go but
+      // we will make sure to note this so that a health check may be used to determine if
+      // the application should be restarted.
+      Svg2png.pageCloseErrors.push(this.id);
+    }
+  }
+
   private async rasterize(browser: Browser): Promise<Buffer> {
     try {
+      // We may have already cancelled the conversion before we even load a page.
+      await this.throwIfCancelled();
+
       this.log('starting conversion');
       const page = await this.loadPage(browser);
+      await this.throwIfCancelled(page);
+
       const { width, height } = await this.setGetDimensions(page);
+      await this.throwIfCancelled(page);
+
       this.log(`setting viewport to [${width}, ${height}]`);
       await page.setViewport({ width, height });
+      await this.throwIfCancelled(page);
 
       const safeOffset = width > 256 ? 256 : 0;
       const blocksPerRow = Math.floor((width - safeOffset) / 256) || 1;
@@ -280,15 +330,19 @@ class Svg2png {
       const maxScreenshotHeight = blocksPerCol * 256;
       if (height <= maxScreenshotHeight) {
         this.log('generating screenshot, no need to stitch');
-        return await page.screenshot({
+        const result = await page.screenshot({
           fullPage: true,
           omitBackground: true,
           type: 'png',
         });
+        await this.closePage(page);
+        return result;
       } else {
         const totalBlocks = Math.ceil(height / maxScreenshotHeight);
         this.log(`stitching ${totalBlocks} blocks`);
-        return await this.stitchBlocks(page, width, height, maxScreenshotHeight);
+        const stitchedResult = await this.stitchBlocks(page, width, height, maxScreenshotHeight);
+        await this.closePage(page);
+        return stitchedResult;
       }
     } catch (err) {
       return Promise.reject(err);
@@ -316,7 +370,11 @@ class Svg2png {
           },
           omitBackground: true,
         });
+        await this.throwIfCancelled(page);
+
         const buffer = await sharp(screenshot).raw().toBuffer();
+        await this.throwIfCancelled(page);
+
         chunks.push(buffer);
       } catch (err) {
         err.message = `chunk collection failure: ${err.message}`;
@@ -330,6 +388,8 @@ class Svg2png {
     chunks.forEach((s, i) => s.copy(composite, i * bufferSize));
     this.log('waiting on sharp');
     try {
+      // We already have everything to create the image. If we proceed can we still have a way
+      // to cancel the operation?
       return await sharp(composite, {
         raw: {
           width: width,
@@ -341,18 +401,6 @@ class Svg2png {
       err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
     }
-  }
-
-  /**
-   * Close the page associated with this Svg2Png instance.
-   */
-  private closePage(): Promise<void> {
-    const page = Svg2png.pages[this.id];
-    if (page) {
-      delete Svg2png.pages[this.id];
-      return page.close();
-    }
-    return Promise.reject(new Error('no page found to closed.'));
   }
 
   /**
