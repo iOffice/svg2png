@@ -396,7 +396,7 @@ class Svg2png {
           height: height,
           channels: channels,
         },
-      }).png().toBuffer();
+      }).limitInputPixels(false).png().toBuffer();
     } catch (err) {
       err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
