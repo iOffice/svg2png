@@ -4,6 +4,7 @@ import { Browser, Page } from 'puppeteer';
 import * as sharp from 'sharp';
 
 import { IConfig, IDimensions, ISvg2pngPoolConfig } from './interfaces';
+import { getDimensions, setDimensions } from './page-utils';
 import { createPuppeteerPool } from './puppeteer-pool';
 
 /**
@@ -275,7 +276,7 @@ class Svg2png {
         height: this.options.height,
         scale: this.options.scale,
       });
-      const actions = await this.setDimensions(page, this.options);
+      const actions = await setDimensions(page, this.options);
       this.log(`actions taken: ${actions.join(', ')}.`);
     } catch (err) {
       this.log(`failed to set dimensions`, { error: err });
@@ -283,7 +284,7 @@ class Svg2png {
 
     try {
       this.log('getting dimensions');
-      const dimensions = await this.getDimensions(page);
+      const dimensions = await getDimensions(page);
       if (!dimensions) {
         return this.failure(new Error('unable to obtain the dimensions'));
       }
@@ -401,82 +402,6 @@ class Svg2png {
       err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
     }
-  }
-
-  /**
-   * Sets the dimensions of the svg. The dimensions passed in must be positive numbers. The same
-   * goes for the `scale` value. It is not possible to have an infinite picture (scale of 0).
-   * Returns of promise which resolves to an array of strings stating the operations that took
-   * place.
-   */
-  setDimensions(page: Page, dimensions: Partial<IDimensions>): Promise<string[]> {
-    if (!dimensions.width && !dimensions.height && !dimensions.scale) {
-      return Promise.resolve(['nothing to set']);
-    }
-    return page.evaluate(({ width, height, scale }) => {
-      const el = document.querySelector('svg');
-      if (!el) {
-        return Promise.reject(new Error('setDimensions: no svg element found'));
-      }
-      const actions = [];
-      if (width) {
-        el.setAttribute('width', `${width}px`);
-        actions.push(`set width to ${width}px`);
-      } else {
-        el.removeAttribute('width');
-        actions.push("removed width");
-      }
-      if (height) {
-        el.setAttribute('height', height + "px");
-        actions.push("set height to " + height + "px");
-      } else {
-        el.removeAttribute('height');
-        actions.push("removed height");
-      }
-      if (scale) {
-        const viewBoxWidth = el.viewBox.animVal.width;
-        const viewBoxHeight = el.viewBox.animVal.height;
-        const scaledWidth = viewBoxWidth / scale;
-        const scaledHeight = viewBoxHeight / scale;
-        el.setAttribute('width', scaledWidth + 'px');
-        el.setAttribute('height', scaledHeight + 'px');
-        actions.push(`set scaled dimensions to [${scaledWidth}px, ${scaledHeight}px]`);
-        el.removeAttribute('clip-path');
-        /* It might eventually be necessary to scale the clip path of the root svg element
-        const clipPathEl = document.querySelector("svg > clipPath > path");
-        clipPathEl.setAttribute("d", `M0 0v${scaledHeight}h${scaledWidth}V0z`)
-        */
-      }
-      return Promise.resolve(actions);
-    }, dimensions);
-  }
-
-  /**
-   * Obtain the dimensions of the svg. Note that the scale property has been arbitrarily set 1.
-   */
-  getDimensions(page: Page): Promise<IDimensions> {
-    return page.evaluate(() => {
-      const el = document.querySelector('svg');
-      if (!el) {
-        return Promise.reject(new Error('getDimensions: no svg element found'));
-      }
-      const widthIsPercent = (el.getAttribute('width') || '').endsWith('%');
-      const heightIsPercent = (el.getAttribute('height') || '').endsWith('%');
-      const width = !widthIsPercent && parseFloat(el.getAttribute('width') || '0');
-      const height = !heightIsPercent && parseFloat(el.getAttribute('height') || '0');
-      if (width && height) {
-        return Promise.resolve({ width: width, height: height, scale: 1 });
-      }
-      const viewBoxWidth = el.viewBox.animVal.width;
-      const viewBoxHeight = el.viewBox.animVal.height;
-      if (width && viewBoxHeight) {
-        return Promise.resolve({ width: width, height: width * viewBoxHeight / viewBoxWidth, scale: 1 });
-      }
-      if (height && viewBoxWidth) {
-        return Promise.resolve({ width: height * viewBoxWidth / viewBoxHeight, height: height, scale: 1 });
-      }
-      return Promise.reject(new Error('getDimensions: no width/height found'));
-    });
   }
 }
 
