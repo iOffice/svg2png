@@ -3,7 +3,7 @@ import { Pool } from 'generic-pool';
 import { Browser, Page } from 'puppeteer';
 import * as sharp from 'sharp';
 
-import { IConfig, IDimensions, ISvg2pngPoolConfig } from './interfaces';
+import { IConfig, IDimensions, ISvg2pngConfig } from './interfaces';
 import { getDimensions, setDimensions } from './page-utils';
 import { createPuppeteerPool } from './puppeteer-pool';
 
@@ -19,9 +19,9 @@ enum Status { NOT_STARTED, PENDING, DONE, FAILED, CANCELLED }
  * if we want our application or tests to finish properly.
  */
 class Svg2png {
-  // Default configuration. Can be overriden by using `Svg2Png.setPoolConfig`.
-  private static configuration: ISvg2pngPoolConfig = {
-    config: {
+  // Default configuration. Can be overriden by using `Svg2Png.setConfiguration`.
+  private static configuration: ISvg2pngConfig = {
+    puppeteerPoolConfig: {
       maxUses: 1,
       validator: () => Promise.resolve(true),
     },
@@ -71,11 +71,11 @@ class Svg2png {
    *
    * @param options The options object for the pool.
    */
-  static setPoolConfig(options: ISvg2pngPoolConfig) {
+  static setConfiguration(options: ISvg2pngConfig) {
     if (!Svg2png.pool) {
       this.configuration = {
-        config: {
-          ...options.config,
+        puppeteerPoolConfig: {
+          ...options.puppeteerPoolConfig,
           maxUses: 1,
           validator: () => Promise.resolve(true),
         },
@@ -98,12 +98,12 @@ class Svg2png {
 
   /*
    * Returns the singleton pool of browsers. This is made as a method so that we only create
-   * a pool the moment we need it. (trying to avoid side effects from loading the file).
+   * a pool the moment we need it. (trying to avoid side effects from loading the svg2png module).
    */
   private static getPool(): Pool<Browser> {
     if (!Svg2png.pool) {
       Svg2png.pool = createPuppeteerPool(
-        Svg2png.configuration.config,
+        Svg2png.configuration.puppeteerPoolConfig,
         Svg2png.configuration.puppeteerlaunchOptions,
         Svg2png.configuration.genericPoolConfig,
       );

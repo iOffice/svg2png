@@ -19,13 +19,13 @@ interface IPuppeteerPoolConfig {
 }
 
 /**
- * A configuration object that can be used to initialize the pool of browsers.
+ * A global configuration object for the Svg2png static class.
  */
-interface ISvg2pngPoolConfig {
+interface ISvg2pngConfig {
   /**
    * Our custom configuration which is used to specify the maximum number of uses for each browser.
    */
-  config: IPuppeteerPoolConfig;
+  puppeteerPoolConfig: IPuppeteerPoolConfig;
 
   /**
    * The options to be used when a new browser gets launched.
@@ -88,5 +88,5 @@ export {
   IConfig,
   IDimensions,
   IPuppeteerPoolConfig,
-  ISvg2pngPoolConfig,
+  ISvg2pngConfig,
 };
