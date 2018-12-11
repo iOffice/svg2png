@@ -46,6 +46,7 @@ class Svg2png {
   private history: ([string, any] | string)[] = [];
   private status = Status.NOT_STARTED;
   private cancellingReason = '';
+  private lastTic = 0;
 
   constructor(config: IConfig) {
     this.id = ++Svg2png.idCounter;
@@ -56,6 +57,14 @@ class Svg2png {
     }
     this.source = opt.url;
     this.options = opt;
+  }
+
+  tic() {
+    this.lastTic = Date.now();
+  }
+
+  toc() {
+    return Date.now() - this.lastTic;
   }
 
   /**
@@ -205,7 +214,7 @@ class Svg2png {
 
   private convertInBrowser(fn: (browser: Browser) => any): Promise<Buffer> {
     return new Promise(async (resolve, reject) => {
-      const timeout = this.options.conversionTimeout || 30000;
+      const timeout = this.options.conversionTimeout || 300000;
       this.log('setting timeout', { conversionId: this.id, timeout });
       const timeoutHandle = setTimeout(() => {
         let errorMsg = '';
@@ -245,8 +254,10 @@ class Svg2png {
       await this.throwIfCancelled(page);
 
       this.status = Status.PENDING;
+      this.tic();
       this.log(`navigating to page`, { url: this.source });
       await this.navigateToSource(page);
+      this.log(`    ${this.toc()}ms`);
       await this.throwIfCancelled(page);
 
       return page;
@@ -359,6 +370,7 @@ class Svg2png {
     const totalChunks = Math.ceil(height / maxScreenshotHeight);
     const chunks = [];
     for (let ypos = 0, chunk = 1; ypos < height; ypos += maxScreenshotHeight, chunk++) {
+      this.tic();
       this.log(`processing ${chunk}/${totalChunks}`);
       const clipHeight = Math.min(height - ypos, maxScreenshotHeight);
       try {
@@ -374,6 +386,7 @@ class Svg2png {
         await this.throwIfCancelled(page);
 
         const buffer = await sharp(screenshot).raw().toBuffer();
+        this.log(`    ${this.toc()}ms`);
         await this.throwIfCancelled(page);
 
         chunks.push(buffer);
@@ -386,18 +399,24 @@ class Svg2png {
     const channels = 4;
     const bufferSize = width * maxScreenshotHeight * channels;
     const composite = Buffer.allocUnsafe(bufferSize * chunks.length);
+
     chunks.forEach((s, i) => s.copy(composite, i * bufferSize));
     this.log('waiting on sharp');
+
     try {
       // We already have everything to create the image. If we proceed can we still have a way
       // to cancel the operation?
-      return await sharp(composite, {
+      this.tic();
+      const result = await sharp(composite, {
         raw: {
           width: width,
           height: height,
           channels: channels,
         },
       }).limitInputPixels(false).png().toBuffer();
+      this.log(`    ${this.toc()}ms`);
+
+      return result;
     } catch (err) {
       err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
