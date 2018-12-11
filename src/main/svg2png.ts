@@ -19,6 +19,7 @@ enum Status { NOT_STARTED, PENDING, DONE, FAILED, CANCELLED }
  * if we want our application or tests to finish properly.
  */
 class Svg2png {
+  private static inProgress: { [key: number]: number } = {};
   // Default configuration. Can be overriden by using `Svg2Png.setConfiguration`.
   private static configuration: ISvg2pngConfig = {
     puppeteerPoolConfig: {
@@ -57,6 +58,7 @@ class Svg2png {
     }
     this.source = opt.url;
     this.options = opt;
+    Svg2png.inProgress[this.id] = Date.now();
   }
 
   tic() {
@@ -72,6 +74,15 @@ class Svg2png {
    */
   static getPageClosingFailures(): number[] {
     return [...Svg2png.pageCloseErrors];
+  }
+
+  /**
+   * Provides an array of times (in milliseconds) which a conversion has taken up to the time
+   * that the method was called.
+   */
+  static getTimeSpentOnConversions(): number[] {
+    const ids = Object.keys(Svg2png.inProgress);
+    return ids.map(id => Date.now() - Svg2png.inProgress[id]);
   }
 
   /**
@@ -200,6 +211,7 @@ class Svg2png {
       const result = await this.convertInBrowser(this.rasterize.bind(this));
       this.status = Status.DONE;
       this.log('SVG2PNG::success');
+      delete Svg2png.inProgress[this.id];
       return result;
     } catch (err) {
       this.status = Status.FAILED;
@@ -208,6 +220,7 @@ class Svg2png {
         id: this.id,
         history: this.history,
       };
+      delete Svg2png.inProgress[this.id];
       return Promise.reject(err);
     }
   }
