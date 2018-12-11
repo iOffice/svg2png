@@ -41,7 +41,7 @@ async function main() {
     .argv;
   try {
     const inputFilename = argv._[0];
-    const outputFilename = argv.output || path.basename(inputFilename, '.svg') + ".png";
+    const outputFilename = argv.output || path.basename(inputFilename, '.svg') + '.png';
     const output = await svg2png({
       width: +argv.width,
       height: +argv.height,

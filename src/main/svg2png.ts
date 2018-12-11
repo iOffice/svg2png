@@ -3,7 +3,8 @@ import { Pool } from 'generic-pool';
 import { Browser, Page } from 'puppeteer';
 import * as sharp from 'sharp';
 
-import { IConfig, IDimensions, ISvg2pngPoolConfig } from './interfaces';
+import { IConfig, IDimensions, ISvg2pngConfig } from './interfaces';
+import { getDimensions, setDimensions } from './page-utils';
 import { createPuppeteerPool } from './puppeteer-pool';
 
 /**
@@ -18,9 +19,10 @@ enum Status { NOT_STARTED, PENDING, DONE, FAILED, CANCELLED }
  * if we want our application or tests to finish properly.
  */
 class Svg2png {
-  // Default configuration. Can be overriden by using `Svg2Png.setPoolConfig`.
-  private static configuration: ISvg2pngPoolConfig = {
-    config: {
+  private static inProgress: { [key: number]: number } = {};
+  // Default configuration. Can be overriden by using `Svg2Png.setConfiguration`.
+  private static configuration: ISvg2pngConfig = {
+    puppeteerPoolConfig: {
       maxUses: 1,
       validator: () => Promise.resolve(true),
     },
@@ -55,6 +57,15 @@ class Svg2png {
     }
     this.source = opt.url;
     this.options = opt;
+    Svg2png.inProgress[this.id] = Date.now();
+  }
+
+  tic(label: string): void {
+    console.time(`    [${this.id}] ${label}`);
+  }
+
+  toc(label: string): void {
+    console.timeEnd(`    [${this.id}] ${label}`);
   }
 
   /**
@@ -65,16 +76,25 @@ class Svg2png {
   }
 
   /**
+   * Provides an array of times (in milliseconds) which a conversion has taken up to the time
+   * that the method was called.
+   */
+  static getTimeSpentOnConversions(): number[] {
+    const ids = Object.keys(Svg2png.inProgress);
+    return ids.map(id => Date.now() - Svg2png.inProgress[id]);
+  }
+
+  /**
    * To be used before any call to `svg2png`. This will override the settings used to create the
    * singleton pool of browsers.
    *
    * @param options The options object for the pool.
    */
-  static setPoolConfig(options: ISvg2pngPoolConfig) {
+  static setConfiguration(options: ISvg2pngConfig) {
     if (!Svg2png.pool) {
       this.configuration = {
-        config: {
-          ...options.config,
+        puppeteerPoolConfig: {
+          ...options.puppeteerPoolConfig,
           maxUses: 1,
           validator: () => Promise.resolve(true),
         },
@@ -97,12 +117,12 @@ class Svg2png {
 
   /*
    * Returns the singleton pool of browsers. This is made as a method so that we only create
-   * a pool the moment we need it. (trying to avoid side effects from loading the file).
+   * a pool the moment we need it. (trying to avoid side effects from loading the svg2png module).
    */
   private static getPool(): Pool<Browser> {
     if (!Svg2png.pool) {
       Svg2png.pool = createPuppeteerPool(
-        Svg2png.configuration.config,
+        Svg2png.configuration.puppeteerPoolConfig,
         Svg2png.configuration.puppeteerlaunchOptions,
         Svg2png.configuration.genericPoolConfig,
       );
@@ -190,6 +210,7 @@ class Svg2png {
       const result = await this.convertInBrowser(this.rasterize.bind(this));
       this.status = Status.DONE;
       this.log('SVG2PNG::success');
+      delete Svg2png.inProgress[this.id];
       return result;
     } catch (err) {
       this.status = Status.FAILED;
@@ -198,13 +219,14 @@ class Svg2png {
         id: this.id,
         history: this.history,
       };
+      delete Svg2png.inProgress[this.id];
       return Promise.reject(err);
     }
   }
 
   private convertInBrowser(fn: (browser: Browser) => any): Promise<Buffer> {
     return new Promise(async (resolve, reject) => {
-      const timeout = this.options.conversionTimeout || 30000;
+      const timeout = this.options.conversionTimeout || 300000;
       this.log('setting timeout', { conversionId: this.id, timeout });
       const timeoutHandle = setTimeout(() => {
         let errorMsg = '';
@@ -244,8 +266,10 @@ class Svg2png {
       await this.throwIfCancelled(page);
 
       this.status = Status.PENDING;
+      this.tic('page_navigation');
       this.log(`navigating to page`, { url: this.source });
       await this.navigateToSource(page);
+      this.toc('page_navigation');
       await this.throwIfCancelled(page);
 
       return page;
@@ -275,7 +299,7 @@ class Svg2png {
         height: this.options.height,
         scale: this.options.scale,
       });
-      const actions = await this.setDimensions(page, this.options);
+      const actions = await setDimensions(page, this.options);
       this.log(`actions taken: ${actions.join(', ')}.`);
     } catch (err) {
       this.log(`failed to set dimensions`, { error: err });
@@ -283,7 +307,7 @@ class Svg2png {
 
     try {
       this.log('getting dimensions');
-      const dimensions = await this.getDimensions(page);
+      const dimensions = await getDimensions(page);
       if (!dimensions) {
         return this.failure(new Error('unable to obtain the dimensions'));
       }
@@ -358,6 +382,7 @@ class Svg2png {
     const totalChunks = Math.ceil(height / maxScreenshotHeight);
     const chunks = [];
     for (let ypos = 0, chunk = 1; ypos < height; ypos += maxScreenshotHeight, chunk++) {
+      this.tic(`chunk_${chunk}_of_${totalChunks}`);
       this.log(`processing ${chunk}/${totalChunks}`);
       const clipHeight = Math.min(height - ypos, maxScreenshotHeight);
       try {
@@ -373,6 +398,7 @@ class Svg2png {
         await this.throwIfCancelled(page);
 
         const buffer = await sharp(screenshot).raw().toBuffer();
+        this.toc(`chunk_${chunk}_of_${totalChunks}`);
         await this.throwIfCancelled(page);
 
         chunks.push(buffer);
@@ -385,98 +411,28 @@ class Svg2png {
     const channels = 4;
     const bufferSize = width * maxScreenshotHeight * channels;
     const composite = Buffer.allocUnsafe(bufferSize * chunks.length);
+
     chunks.forEach((s, i) => s.copy(composite, i * bufferSize));
     this.log('waiting on sharp');
+
     try {
       // We already have everything to create the image. If we proceed can we still have a way
       // to cancel the operation?
-      return await sharp(composite, {
+      this.tic('stitch');
+      const result = await sharp(composite, {
         raw: {
           width: width,
           height: height,
           channels: channels,
         },
-      }).png().toBuffer();
+      }).limitInputPixels(false).png().toBuffer();
+      this.toc('stitch');
+
+      return result;
     } catch (err) {
       err.message = `sharp failure: ${err.message}`;
       return this.failure(err);
     }
-  }
-
-  /**
-   * Sets the dimensions of the svg. The dimensions passed in must be positive numbers. The same
-   * goes for the `scale` value. It is not possible to have an infinite picture (scale of 0).
-   * Returns of promise which resolves to an array of strings stating the operations that took
-   * place.
-   */
-  setDimensions(page: Page, dimensions: Partial<IDimensions>): Promise<string[]> {
-    if (!dimensions.width && !dimensions.height && !dimensions.scale) {
-      return Promise.resolve(['nothing to set']);
-    }
-    return page.evaluate(({ width, height, scale }) => {
-      const el = document.querySelector('svg');
-      if (!el) {
-        return Promise.reject(new Error('setDimensions: no svg element found'));
-      }
-      const actions = [];
-      if (width) {
-        el.setAttribute('width', `${width}px`);
-        actions.push(`set width to ${width}px`);
-      } else {
-        el.removeAttribute('width');
-        actions.push("removed width");
-      }
-      if (height) {
-        el.setAttribute('height', height + "px");
-        actions.push("set height to " + height + "px");
-      } else {
-        el.removeAttribute('height');
-        actions.push("removed height");
-      }
-      if (scale) {
-        const viewBoxWidth = el.viewBox.animVal.width;
-        const viewBoxHeight = el.viewBox.animVal.height;
-        const scaledWidth = viewBoxWidth / scale;
-        const scaledHeight = viewBoxHeight / scale;
-        el.setAttribute('width', scaledWidth + 'px');
-        el.setAttribute('height', scaledHeight + 'px');
-        actions.push(`set scaled dimensions to [${scaledWidth}px, ${scaledHeight}px]`);
-        el.removeAttribute('clip-path');
-        /* It might eventually be necessary to scale the clip path of the root svg element
-        const clipPathEl = document.querySelector("svg > clipPath > path");
-        clipPathEl.setAttribute("d", `M0 0v${scaledHeight}h${scaledWidth}V0z`)
-        */
-      }
-      return Promise.resolve(actions);
-    }, dimensions);
-  }
-
-  /**
-   * Obtain the dimensions of the svg. Note that the scale property has been arbitrarily set 1.
-   */
-  getDimensions(page: Page): Promise<IDimensions> {
-    return page.evaluate(() => {
-      const el = document.querySelector('svg');
-      if (!el) {
-        return Promise.reject(new Error('getDimensions: no svg element found'));
-      }
-      const widthIsPercent = (el.getAttribute('width') || '').endsWith('%');
-      const heightIsPercent = (el.getAttribute('height') || '').endsWith('%');
-      const width = !widthIsPercent && parseFloat(el.getAttribute('width') || '0');
-      const height = !heightIsPercent && parseFloat(el.getAttribute('height') || '0');
-      if (width && height) {
-        return Promise.resolve({ width: width, height: height, scale: 1 });
-      }
-      const viewBoxWidth = el.viewBox.animVal.width;
-      const viewBoxHeight = el.viewBox.animVal.height;
-      if (width && viewBoxHeight) {
-        return Promise.resolve({ width: width, height: width * viewBoxHeight / viewBoxWidth, scale: 1 });
-      }
-      if (height && viewBoxWidth) {
-        return Promise.resolve({ width: height * viewBoxWidth / viewBoxHeight, height: height, scale: 1 });
-      }
-      return Promise.reject(new Error('getDimensions: no width/height found'));
-    });
   }
 }
 
