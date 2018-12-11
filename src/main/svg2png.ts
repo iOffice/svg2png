@@ -47,7 +47,6 @@ class Svg2png {
   private history: ([string, any] | string)[] = [];
   private status = Status.NOT_STARTED;
   private cancellingReason = '';
-  private lastTic = 0;
 
   constructor(config: IConfig) {
     this.id = ++Svg2png.idCounter;
@@ -61,12 +60,12 @@ class Svg2png {
     Svg2png.inProgress[this.id] = Date.now();
   }
 
-  tic() {
-    this.lastTic = Date.now();
+  tic(label: string): void {
+    console.time(`    ${label}`);
   }
 
-  toc() {
-    return Date.now() - this.lastTic;
+  toc(label: string): void {
+    console.timeEnd(`    ${label}`);
   }
 
   /**
@@ -267,10 +266,10 @@ class Svg2png {
       await this.throwIfCancelled(page);
 
       this.status = Status.PENDING;
-      this.tic();
+      this.tic('page_navigation');
       this.log(`navigating to page`, { url: this.source });
       await this.navigateToSource(page);
-      this.log(`    ${this.toc()}ms`);
+      this.toc('page_navigation');
       await this.throwIfCancelled(page);
 
       return page;
@@ -383,7 +382,7 @@ class Svg2png {
     const totalChunks = Math.ceil(height / maxScreenshotHeight);
     const chunks = [];
     for (let ypos = 0, chunk = 1; ypos < height; ypos += maxScreenshotHeight, chunk++) {
-      this.tic();
+      this.tic(`chunk_${chunk}_of_${totalChunks}`);
       this.log(`processing ${chunk}/${totalChunks}`);
       const clipHeight = Math.min(height - ypos, maxScreenshotHeight);
       try {
@@ -399,7 +398,7 @@ class Svg2png {
         await this.throwIfCancelled(page);
 
         const buffer = await sharp(screenshot).raw().toBuffer();
-        this.log(`    ${this.toc()}ms`);
+        this.toc(`chunk_${chunk}_of_${totalChunks}`);
         await this.throwIfCancelled(page);
 
         chunks.push(buffer);
@@ -419,7 +418,7 @@ class Svg2png {
     try {
       // We already have everything to create the image. If we proceed can we still have a way
       // to cancel the operation?
-      this.tic();
+      this.tic('stitch');
       const result = await sharp(composite, {
         raw: {
           width: width,
@@ -427,7 +426,7 @@ class Svg2png {
           channels: channels,
         },
       }).limitInputPixels(false).png().toBuffer();
-      this.log(`    ${this.toc()}ms`);
+      this.toc('stitch');
 
       return result;
     } catch (err) {
