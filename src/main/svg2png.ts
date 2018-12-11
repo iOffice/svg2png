@@ -61,11 +61,11 @@ class Svg2png {
   }
 
   tic(label: string): void {
-    console.time(`    ${label}`);
+    console.time(`    [${this.id}] ${label}`);
   }
 
   toc(label: string): void {
-    console.timeEnd(`    ${label}`);
+    console.timeEnd(`    [${this.id}] ${label}`);
   }
 
   /**
